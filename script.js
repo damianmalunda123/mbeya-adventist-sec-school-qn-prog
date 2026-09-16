@@ -684,10 +684,8 @@ function displayQuestion() {
 }
 
 function selectOption(value, container) {
-    const nextBtn = document.getElementById('nextBtn');
-    if (nextBtn.dataset.retry === 'true') return;
-
     const question = currentQuestions[currentQuestionIndex];
+    const nextBtn = document.getElementById('nextBtn');
     const options = container.querySelectorAll('.option');
     const optionLetters = ['a', 'b', 'c', 'd'];
     const selectedIndex = optionLetters.indexOf(value);
@@ -707,44 +705,16 @@ function selectOption(value, container) {
         return;
     }
 
-    const attempts = (questionRetryState[currentQuestionIndex] || 0) + 1;
-    questionRetryState[currentQuestionIndex] = attempts;
-
+    userAnswers[currentQuestionIndex] = value;
     options[selectedIndex].classList.add('incorrect');
     options[correctIndex].classList.add('correct');
-
-    if (attempts === 1) {
-        userAnswers[currentQuestionIndex] = null;
-        nextBtn.dataset.retry = 'true';
-        nextBtn.textContent = 'Retry Question';
-        showExplanation('Wrong answer. Try the same question once more.');
-        return;
-    }
-
-    userAnswers[currentQuestionIndex] = value;
     nextBtn.dataset.retry = 'false';
     nextBtn.textContent = currentQuestionIndex === currentQuestions.length - 1 ? 'Finish This Set' : 'Next →';
-    showExplanation(`Incorrect again. The correct answer is ${question[question.correct].toUpperCase()}. ${question.exp}`);
-
-    setTimeout(() => {
-        if (currentQuestionIndex < currentQuestions.length - 1) {
-            currentQuestionIndex++;
-            displayQuestion();
-        } else {
-            finishBatch();
-        }
-    }, 1400);
+    showExplanation(`Incorrect. The correct answer is ${question[question.correct].toUpperCase()}. ${question.exp}`);
 }
 
 function nextQuestion() {
     const nextBtn = document.getElementById('nextBtn');
-
-    if (nextBtn.dataset.retry === 'true') {
-        userAnswers[currentQuestionIndex] = null;
-        questionRetryState[currentQuestionIndex] = 0;
-        displayQuestion();
-        return;
-    }
 
     if (currentQuestionIndex < currentQuestions.length - 1) {
         currentQuestionIndex++;
@@ -849,6 +819,24 @@ function startNewQuiz() {
     }
 
     selectLevel(currentLevel);
+}
+
+function changeLevel() {
+    if (!currentSubject) {
+        restartQuiz();
+        return;
+    }
+
+    currentLevel = null;
+    pool = [];
+    batchStart = 0;
+    currentQuestions = [];
+    userAnswers = [];
+    currentQuestionIndex = 0;
+    sessionCorrect = 0;
+    sessionAnswered = 0;
+    startTime = null;
+    showSection('levelSection');
 }
 
 function goBack() {
