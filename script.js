@@ -427,6 +427,8 @@ function getQuestionDifficultyScore(subjectKey, question) {
 }
 
 function classifyQuestionDifficulty(subjectKey, question) {
+    if (question.difficulty) return question.difficulty;
+
     const score = getQuestionDifficultyScore(subjectKey, question);
 
     if (score <= 15) return 'easy';
@@ -460,21 +462,7 @@ function ensureSubjectBankSize() {
             uniqueBank.push(question);
         });
 
-        const expanded = [...uniqueBank];
-        let variantCounter = 1;
-
-        while (expanded.length < TARGET_PER_SUBJECT) {
-            const source = uniqueBank[(expanded.length - 1) % uniqueBank.length];
-            const variant = createQuestionVariant(source, variantCounter, subjectKey);
-            const variantKey = normalizeQuestionText(variant.q);
-            if (!seen.has(variantKey)) {
-                seen.add(variantKey);
-                expanded.push(variant);
-            }
-            variantCounter += 1;
-        }
-
-        questionBanks[subjectKey] = expanded.slice(0, TARGET_PER_SUBJECT);
+        questionBanks[subjectKey] = uniqueBank;
     });
 }
 
@@ -527,7 +515,75 @@ function buildSessionPool(subjectKey, level) {
     return uniquePool;
 }
 
-ensureSubjectBankSize();
+function parseMarkdownQuestionBank(markdown, subjectKey) {
+    const sectionStarts = [
+        { marker: 'SECTION A:', difficulty: 'easy' },
+        { marker: 'SECTION B:', difficulty: 'medium' },
+        { marker: 'SECTION C:', difficulty: 'hard' }
+    ].map(section => ({
+        ...section,
+        index: markdown.indexOf(section.marker)
+    }));
+
+    const questions = [];
+    const questionPattern = /\*\*Q\d+:\s*([\s\S]*?)\*\*[\s\S]*?(?=\n\*\*Q\d+:|$)/g;
+    let match;
+
+    while ((match = questionPattern.exec(markdown)) !== null) {
+        const block = match[0];
+        const section = sectionStarts
+            .filter(candidate => candidate.index <= match.index)
+            .pop();
+        const questionText = match[1].replace(/\s+/g, ' ').trim();
+        const options = {};
+
+        [...block.matchAll(/^- ([ABCD])\)\s*(.+)$/gm)].forEach((optionMatch) => {
+            options[optionMatch[1].toLowerCase()] = optionMatch[2].trim();
+        });
+
+        const answerMatch = block.match(/\*\*Answer:\*\*\s*([ABCD])\)/i);
+        const explanationMatch = block.match(/\*\*Explanation:\*\*\s*([\s\S]*?)(?=\n\s*$|$)/i);
+
+        if (!section || !questionText || !answerMatch || ['a', 'b', 'c', 'd'].some(key => !options[key])) {
+            continue;
+        }
+
+        questions.push({
+            q: questionText,
+            a: options.a,
+            b: options.b,
+            c: options.c,
+            d: options.d,
+            correct: answerMatch[1].toLowerCase(),
+            exp: explanationMatch ? explanationMatch[1].replace(/\s+/g, ' ').trim() : `Practice question from the ${subjectKey} question bank.`,
+            difficulty: section.difficulty
+        });
+    }
+
+    return questions;
+}
+
+async function loadExternalQuestionBanks() {
+    const response = await fetch('maswali/Physics_300_Questions_Form1_4.md');
+    if (!response.ok) throw new Error(`Could not load Physics question bank (${response.status}).`);
+
+    const markdown = await response.text();
+    const externalQuestions = parseMarkdownQuestionBank(markdown, 'physics');
+    if (externalQuestions.length) {
+        questionBanks.physics.push(...externalQuestions);
+    }
+}
+
+async function initializeQuizApp() {
+    try {
+        await loadExternalQuestionBanks();
+    } catch (error) {
+        console.warn(error.message);
+    }
+
+    ensureSubjectBankSize();
+    renderSubjectCards();
+}
 
 // ---------- STATE ----------
 let currentSubject = null;
@@ -563,12 +619,7 @@ function getFreshUniqueSessionPool(subjectKey, level) {
     const used = usedQuestionKeysBySubjectLevel[key] || new Set();
     const available = basePool.filter((question) => !used.has(getQuestionKey(question)));
 
-    if (available.length >= BATCH_SIZE) {
-        return shuffle(available).slice(0, BATCH_SIZE);
-    }
-
-    const fallback = basePool.filter((question) => used.has(getQuestionKey(question)));
-    return shuffle([...available, ...fallback]).slice(0, Math.min(BATCH_SIZE, basePool.length));
+    return shuffle(available).slice(0, BATCH_SIZE);
 }
 
 function shuffle(arr) {
@@ -598,7 +649,7 @@ function renderSubjectCards() {
     });
 }
 
-renderSubjectCards();
+initializeQuizApp();
 
 function selectSubject(subject) {
     currentSubject = subject;
@@ -608,6 +659,11 @@ function selectSubject(subject) {
 function selectLevel(level) {
     currentLevel = level;
     pool = getFreshUniqueSessionPool(currentSubject, level);
+    if (!pool.length) {
+        window.alert('There are no new questions left for this subject and level.');
+        return;
+    }
+
     rememberUsedQuestions(currentSubject, level, pool);
     batchStart = 0;
     sessionCorrect = 0;
@@ -618,13 +674,7 @@ function selectLevel(level) {
 }
 
 function loadBatch() {
-    const remainingPool = pool.slice(batchStart);
-    currentQuestions = remainingPool.slice(0, BATCH_SIZE);
-
-    if (currentQuestions.length < BATCH_SIZE && pool.length >= BATCH_SIZE) {
-        const reusedQuestions = pool.slice(0, BATCH_SIZE - currentQuestions.length);
-        currentQuestions = [...currentQuestions, ...reusedQuestions.filter((question) => !currentQuestions.some((selected) => normalizeQuestionText(selected.q) === normalizeQuestionText(question.q)))];
-    }
+    currentQuestions = pool.slice(batchStart, batchStart + BATCH_SIZE);
 
     userAnswers = new Array(currentQuestions.length).fill(null);
     questionRetryState = new Array(currentQuestions.length).fill(0);
@@ -639,6 +689,10 @@ function showExplanation(message) {
     explanationBox.classList.add('show');
 }
 
+function getDisplayQuestionText(question) {
+    return String(question.q || '').replace(/\s+\(\d+\)\s*$/, '');
+}
+
 function displayQuestion() {
     const question = currentQuestions[currentQuestionIndex];
 
@@ -648,7 +702,7 @@ function displayQuestion() {
     document.getElementById('totalQuestions').textContent = currentQuestions.length;
     document.getElementById('questionNumberLabel').textContent = `Question ${currentQuestionIndex + 1}`;
 
-    document.getElementById('questionText').textContent = question.q;
+    document.getElementById('questionText').textContent = getDisplayQuestionText(question);
 
     const optionsContainer = document.getElementById('optionsContainer');
     optionsContainer.innerHTML = '';
