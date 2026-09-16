@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASS - Question Program</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="image/MASS 1.png" alt="MASS Logo" class="logo" width="200px" height="150px">
+            <h1>MBEYA ADVENTIST SECONDARY SCHOOL </br> QUESTION PROGRAM</h1>
+            <p><i>Get study experience, through questions</i></p>
+        </div>
+
+        <div class="content">
+            <div class="section active" id="subjectSection">
+                <h2 style="margin-bottom: 30px; color: #fff;">Choose subject</h2>
+                <div class="subjects-grid" id="subjectsGrid"></div>
+            </div>
+
+            <div class="section" id="levelSection">
+                <h2 style="margin-bottom: 30px; color: #333;">Choose Level</h2>
+                <div class="levels-grid">
+                    <div class="level-card" onclick="selectLevel('easy')">
+                        <h3>Easy</h3>
+                        <p>For beginners</p>
+                    </div>
+                    <div class="level-card" onclick="selectLevel('normal')">
+                        <h3>Normal</h3>
+                        <p>For intermediate learners</p>
+                    </div>
+                    <div class="level-card" onclick="selectLevel('hard')">
+                        <h3>Hard</h3>
+                        <p>For advanced learners</p>
+                    </div>
+                </div>
+                <div style="text-align:center;">
+                    <button onclick="goBack()" class="btn-secondary">← Back to Subjects</button>
+                </div>
+            </div>
+
+            <div class="section" id="quizSection">
+                <div class="progress-text">
+                    Question <span id="questionCounter">1</span> / <span id="totalQuestions">10</span>
+                    &nbsp;·&nbsp; Total questions in subject: <span id="bankTotal">0</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+
+                <div class="question-container">
+                    <div class="question-number" id="questionNumberLabel">Question 1</div>
+                    <div class="question-text" id="questionText"></div>
+                    <div class="options-container" id="optionsContainer"></div>
+                    <div class="explanation" id="explanation"></div>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="previousQuestion()" id="prevBtn" disabled>← Back</button>
+                    <button onclick="nextQuestion()" id="nextBtn">Next →</button>
+                    <button onclick="quitQuiz()" class="btn-danger">Quit Quiz</button>
+                </div>
+            </div>
+
+            <div class="section" id="batchCompleteSection">
+                <div class="batch-icon">✅</div>
+                <h2 style="text-align:center; color:#333;">You have completed 10 questions!</h2>
+                <div class="batch-tally">
+                    So far: <strong id="batchCorrect">0</strong> correct out of <strong id="batchAnswered">0</strong>
+                    (<span id="batchSubjectName"></span>)
+                </div>
+                <div class="button-group">
+                    <button onclick="continueQuiz()" id="continueBtn">➡️ Continue</button>
+                    <button onclick="stopAndShowResults()" class="btn-secondary">🛑 See Results</button>
+                    <button onclick="quitQuiz()" class="btn-danger">Quit Quiz</button>
+                </div>
+            </div>
+
+            <div class="section" id="bankDoneSection">
+                <div class="batch-icon">🎉 congratulation</div>
+                <h2 style="text-align:center; color:#333;">You have completed all questions in this subject!</h2>
+                <div class="batch-tally" id="bankDoneTally"></div>
+                <div class="button-group">
+                    <button onclick="stopAndShowResults()">See Final Results</button>
+                    <button onclick="quitQuiz()" class="btn-danger">Quit Quiz</button>
+                </div>
+            </div>
+
+            <div class="section" id="resultsSection">
+                <div class="results-container">
+                    <h2 style="color: #333; margin-bottom: 20px;">You have completed the quiz!</h2>
+                    <div class="performance-emoji" id="performanceEmoji"></div>
+                    <div class="performance-message" id="performanceMessage"></div>
+
+                    <div class="score-circle">
+                        <div class="score">
+                            <div class="score-number" id="finalScore">0</div>
+                            <div class="score-total">out of <span id="finalTotal">0</span></div>
+                        </div>
+                    </div>
+
+                    <div class="stats">
+                        <div class="stat-card correct">
+                            <div class="stat-label">Correct Answers</div>
+                            <div class="stat-value" id="correctCount">0</div>
+                        </div>
+                        <div class="stat-card incorrect">
+                            <div class="stat-label">Incorrect Answers</div>
+                            <div class="stat-value" id="incorrectCount">0</div>
+                        </div>
+                        <div class="stat-card" style="border-left-color: #667eea;">
+                            <div class="stat-label">Accuracy</div>
+                            <div class="stat-value" id="accuracy">0%</div>
+                        </div>
+                        <div class="stat-card" style="border-left-color: #667eea;">
+                            <div class="stat-label">Time Taken</div>
+                            <div class="stat-value" id="timeTaken">--</div>
+                        </div>
+                    </div>
+
+                    <button onclick="restartQuiz()" class="btn-secondary">Start New Quiz</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
