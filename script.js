@@ -438,12 +438,26 @@ function classifyQuestionDifficulty(subjectKey, question) {
 
 function createQuestionVariant(question, variantIndex, subjectKey) {
     const baseText = String(question.q || '').trim();
-    const variantText = variantIndex === 0 ? baseText : `${baseText} (${variantIndex + 1})`;
+    const variantText = `Generated practice ${variantIndex}: ${baseText}`;
+
+    const optionEntries = [
+        { key: 'a', text: question.a },
+        { key: 'b', text: question.b },
+        { key: 'c', text: question.c },
+        { key: 'd', text: question.d }
+    ];
+    const shuffledOptions = shuffle(optionEntries);
+    const generatedOptions = {};
+    shuffledOptions.forEach((option, index) => {
+        generatedOptions[String.fromCharCode(97 + index)] = option.text;
+    });
 
     return {
-        ...question,
+        ...generatedOptions,
         q: variantText,
-        exp: `${question.exp || 'Practice question.'} Variant ${variantIndex + 1} for ${subjectKey}.`
+        correct: String.fromCharCode(97 + shuffledOptions.findIndex((option) => option.key === question.correct)),
+        exp: `${question.exp || 'Practice question.'} This is an automatically generated practice variation for ${subjectKey}.`,
+        difficulty: question.difficulty
     };
 }
 
@@ -462,7 +476,21 @@ function ensureSubjectBankSize() {
             uniqueBank.push(question);
         });
 
-        questionBanks[subjectKey] = uniqueBank;
+        const expanded = [...uniqueBank];
+        let variantCounter = 1;
+
+        while (expanded.length < TARGET_PER_SUBJECT) {
+            const source = uniqueBank[(expanded.length - 1) % uniqueBank.length];
+            const variant = createQuestionVariant(source, variantCounter, subjectKey);
+            const variantKey = normalizeQuestionText(variant.q);
+            if (!seen.has(variantKey)) {
+                seen.add(variantKey);
+                expanded.push(variant);
+            }
+            variantCounter += 1;
+        }
+
+        questionBanks[subjectKey] = expanded.slice(0, TARGET_PER_SUBJECT);
     });
 }
 
@@ -574,12 +602,70 @@ async function loadExternalQuestionBanks() {
     }
 }
 
+const ONLINE_TRIVIA_CATEGORIES = {
+    physics: 17,
+    chemistry: 17,
+    biology: 17,
+    mathematics: 19,
+    computer: 18,
+    geography: 22,
+    history: 23,
+    civics: 24,
+    english: 9
+};
+
+function decodeHtmlEntities(value) {
+    const decoder = document.createElement('textarea');
+    decoder.innerHTML = value;
+    return decoder.value;
+}
+
+async function loadOnlineQuestionBank(subjectKey, categoryId) {
+    const response = await fetch(`https://opentdb.com/api.php?amount=50&category=${categoryId}&type=multiple`);
+    if (!response.ok) throw new Error(`Online question source returned ${response.status}.`);
+
+    const payload = await response.json();
+    if (payload.response_code !== 0 || !Array.isArray(payload.results)) return;
+
+    const onlineQuestions = payload.results.map((item) => {
+        const correct = decodeHtmlEntities(item.correct_answer);
+        const options = shuffle([
+            correct,
+            ...item.incorrect_answers.map(decodeHtmlEntities)
+        ]);
+
+        return {
+            q: decodeHtmlEntities(item.question),
+            a: options[0],
+            b: options[1],
+            c: options[2],
+            d: options[3],
+            correct: String.fromCharCode(97 + options.indexOf(correct)),
+            exp: `Online question from Open Trivia Database (${subjectKey}).`
+        };
+    });
+
+    questionBanks[subjectKey].push(...onlineQuestions);
+}
+
+async function loadOnlineQuestionBanks() {
+    await Promise.all(Object.entries(ONLINE_TRIVIA_CATEGORIES).map(async ([subjectKey, categoryId]) => {
+        try {
+            await loadOnlineQuestionBank(subjectKey, categoryId);
+        } catch (error) {
+            console.warn(`Could not load online ${subjectKey} questions: ${error.message}`);
+        }
+    }));
+}
+
 async function initializeQuizApp() {
     try {
         await loadExternalQuestionBanks();
     } catch (error) {
         console.warn(error.message);
     }
+
+    await loadOnlineQuestionBanks();
 
     ensureSubjectBankSize();
     renderSubjectCards();
@@ -690,7 +776,9 @@ function showExplanation(message) {
 }
 
 function getDisplayQuestionText(question) {
-    return String(question.q || '').replace(/\s+\(\d+\)\s*$/, '');
+    return String(question.q || '')
+        .replace(/^Generated practice \d+:\s*/, '')
+        .replace(/\s+\(\d+\)\s*$/, '');
 }
 
 function displayQuestion() {
